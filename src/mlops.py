@@ -123,7 +123,9 @@ class PipelineOrchestrator:
         print(f"✓ Input: {self.config.data_dir}")
         print(f"✓ Output: {self.config.processed_dir}")
         print(f"✓ Sequence length: {self.config.sequence_length}")
-        print(f"✓ Train/val split: {self.config.train_split}/{1-self.config.train_split}")
+        train_val = (self.config.train_split,
+                     1 - self.config.train_split)
+        print(f"✓ Train/val split: {train_val[0]}/{train_val[1]}")
 
         self.history.append({
             'stage': 'data',
@@ -159,10 +161,10 @@ class PipelineOrchestrator:
         print("="*60)
 
         print("✓ Variance analysis (underfitting check)")
-        print(f"✓ Output range validation (clamping check)")
-        print(f"✓ Action range verification")
-        print(f"✓ Long-horizon temporal stability (100 steps)")
-        print(f"✓ Input validation layer")
+        print("✓ Output range validation (clamping check)")
+        print("✓ Action range verification")
+        print("✓ Long-horizon temporal stability (100 steps)")
+        print("✓ Input validation layer")
 
         self.history.append({
             'stage': 'validation',
@@ -221,6 +223,7 @@ class PipelineOrchestrator:
         print("\n" + "="*60)
         print("✅ FULL PIPELINE COMPLETED SUCCESSFULLY")
         print("="*60)
+
 
 if __name__ == "__main__":
     # Example usage

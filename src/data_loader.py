@@ -129,12 +129,15 @@ def load_parquet_files(parquet_dir, max_samples=None, sequence_length=10, return
     obs_dim = None
     valid_obs_dims = None  # Track which obs dimensions are valid
 
-    for file_idx, parquet_file in enumerate(tqdm(parquet_files, desc="Loading parquet files")):
+    for file_idx, parquet_file in enumerate(
+        tqdm(parquet_files, desc="Loading parquet files")
+    ):
         try:
             df = pd.read_parquet(parquet_file)
 
             # Check for required columns
-            if 'action' not in df.columns or 'observation.state' not in df.columns:
+            if ('action' not in df.columns or
+                    'observation.state' not in df.columns):
                 continue
 
             # Each parquet file is ONE trajectory with multiple timesteps
@@ -183,13 +186,19 @@ def load_parquet_files(parquet_dir, max_samples=None, sequence_length=10, return
             if actions.shape[1] != action_dim:
                 continue
 
-            # Identify valid observation dimensions (those with at least some non-NaN values)
+            # Identify valid observation dimensions
+            # (those with at least some non-NaN values)
             if valid_obs_dims is None:
                 obs_has_valid = np.isfinite(observations).any(axis=0)
                 valid_obs_dims = np.where(obs_has_valid)[0]
                 obs_dim = len(valid_obs_dims)
                 if obs_dim < observations.shape[1]:
-                    print(f"⚠️  Using {obs_dim}/{observations.shape[1]} observation dimensions ({observations.shape[1] - obs_dim} always-NaN)")
+                    obs_total = observations.shape[1]
+                    obs_nan = obs_total - obs_dim
+                    msg = (f"\u26a0\ufe0f  Using {obs_dim}/{obs_total} "
+                           f"observation dimensions "
+                           f"({obs_nan} always-NaN)")
+                    print(msg)
 
             # Filter observations to valid dimensions
             observations = observations[:, valid_obs_dims]
@@ -230,12 +239,15 @@ def load_parquet_files(parquet_dir, max_samples=None, sequence_length=10, return
     # all_obs_sequences = []
     all_trajectory_ids = []
 
-    for traj_id, (actions, observations) in enumerate(zip(actions_list, observations_list)):
+    for traj_id, (actions, observations) in enumerate(
+            zip(actions_list, observations_list)
+    ):
         trajectory_len = len(actions)
 
         # Extract all overlapping sequences of length sequence_length
         for start_idx in range(trajectory_len - sequence_length):
-            # Get sequence of length sequence_length and the next action as target
+            # Get sequence of length sequence_length
+            # and the next action as target
             action_seq = actions[start_idx:start_idx + sequence_length]
             obs_seq = observations[start_idx:start_idx + sequence_length]
             next_action = actions[start_idx + sequence_length]
@@ -247,18 +259,33 @@ def load_parquet_files(parquet_dir, max_samples=None, sequence_length=10, return
         raise ValueError("No valid sequences found in parquet files")
 
     # Separate sequences and targets
-    action_sequences = np.array([s[0] for s in all_action_sequences])  # (num_seq, seq_len, action_dim)
-    obs_sequences = np.array([s[1] for s in all_action_sequences])      # (num_seq, seq_len, obs_dim)
-    next_actions = np.array([s[2] for s in all_action_sequences])       # (num_seq, action_dim)
+    action_sequences = np.array(
+        [s[0] for s in all_action_sequences]
+    )  # (num_seq, seq_len, action_dim)
+    obs_sequences = np.array(
+        [s[1] for s in all_action_sequences]
+    )  # (num_seq, seq_len, obs_dim)
+    next_actions = np.array(
+        [s[2] for s in all_action_sequences]
+    )  # (num_seq, action_dim)
 
-    # Create a modified sequences array that stores sequence length for each sample
-    sequences_array = np.full(len(all_action_sequences), sequence_length, dtype=np.int32)
+    # Create a modified sequences array that stores sequence
+    # length for each sample
+    sequences_array = np.full(
+        len(all_action_sequences), sequence_length, dtype=np.int32
+    )
 
-    print(f"✓ Extracted {len(all_action_sequences)} sequences from {len(actions_list)} trajectories")
-    print(f"  Action sequence shape: {action_sequences.shape}, Obs sequence shape: {obs_sequences.shape}")
+    msg = (f"\u2713 Extracted {len(all_action_sequences)} sequences "
+           f"from {len(actions_list)} trajectories")
+    print(msg)
+    msg2 = (f"  Action sequence shape: {action_sequences.shape}, "
+            f"Obs sequence shape: {obs_sequences.shape}")
+    print(msg2)
 
     if return_trajectory_ids:
-        return sequences_array, action_sequences, obs_sequences, next_actions, action_dim, obs_dim, np.array(all_trajectory_ids)
+        return (sequences_array, action_sequences, obs_sequences,
+                next_actions, action_dim, obs_dim,
+                np.array(all_trajectory_ids))
     else:
         return sequences_array, action_sequences, obs_sequences, next_actions, action_dim, obs_dim
 
@@ -285,7 +312,9 @@ def create_dataloaders(batch_size=16, sequence_length=10, num_workers=0,
     # Load data - returns pre-extracted sequences
     if trajectory_split:
         sequences, action_seqs, obs_seqs, next_actions, action_dim, obs_dim, traj_ids = load_parquet_files(
-            data_dir, max_samples=max_samples, sequence_length=sequence_length, return_trajectory_ids=True
+            data_dir, max_samples=max_samples,
+            sequence_length=sequence_length,
+            return_trajectory_ids=True
         )
 
         # Split by trajectory ID
@@ -313,7 +342,9 @@ def create_dataloaders(batch_size=16, sequence_length=10, num_workers=0,
 
     else:
         sequences, action_seqs, obs_seqs, next_actions, action_dim, obs_dim = load_parquet_files(
-            data_dir, max_samples=max_samples, sequence_length=sequence_length, return_trajectory_ids=False
+            data_dir, max_samples=max_samples,
+            sequence_length=sequence_length,
+            return_trajectory_ids=False
         )
         train_indices = None
         val_indices = None
@@ -335,7 +366,9 @@ def create_dataloaders(batch_size=16, sequence_length=10, num_workers=0,
         val_size = len(val_indices)
         from torch.utils.data import Subset
         train_dataset = Subset(dataset, range(train_size))
-        val_dataset = Subset(dataset, range(train_size, train_size + val_size))
+        val_dataset = Subset(
+            dataset, range(train_size, train_size + val_size)
+        )
     else:
         # Random split
         num_samples = len(dataset)
@@ -366,7 +399,9 @@ def create_dataloaders(batch_size=16, sequence_length=10, num_workers=0,
     return train_loader, val_loader, dataset
 
 
-def save_normalization_stats(dataset, save_path='./models/normalization_stats.json'):
+def save_normalization_stats(
+    dataset, save_path='./models/normalization_stats.json'
+):
     """
     Save normalization statistics to JSON for inference
 
@@ -378,12 +413,20 @@ def save_normalization_stats(dataset, save_path='./models/normalization_stats.js
         'action_dim': dataset.action_dim,
         'obs_dim': dataset.obs_dim,
         'action_bounds': {
-            'min': dataset.action_bounds[0].tolist() if hasattr(dataset.action_bounds[0], 'tolist') else list(dataset.action_bounds[0]),
-            'max': dataset.action_bounds[1].tolist() if hasattr(dataset.action_bounds[1], 'tolist') else list(dataset.action_bounds[1])
+            'min': (dataset.action_bounds[0].tolist()
+                    if hasattr(dataset.action_bounds[0], 'tolist')
+                    else list(dataset.action_bounds[0])),
+            'max': (dataset.action_bounds[1].tolist()
+                    if hasattr(dataset.action_bounds[1], 'tolist')
+                    else list(dataset.action_bounds[1]))
         },
         'obs_bounds': {
-            'min': dataset.obs_bounds[0].tolist() if hasattr(dataset.obs_bounds[0], 'tolist') else list(dataset.obs_bounds[0]),
-            'max': dataset.obs_bounds[1].tolist() if hasattr(dataset.obs_bounds[1], 'tolist') else list(dataset.obs_bounds[1])
+            'min': (dataset.obs_bounds[0].tolist()
+                    if hasattr(dataset.obs_bounds[0], 'tolist')
+                    else list(dataset.obs_bounds[0])),
+            'max': (dataset.obs_bounds[1].tolist()
+                    if hasattr(dataset.obs_bounds[1], 'tolist')
+                    else list(dataset.obs_bounds[1]))
         }
     }
 
