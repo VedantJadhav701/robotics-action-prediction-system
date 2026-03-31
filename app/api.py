@@ -249,7 +249,7 @@ async def predict(request: PredictionRequest, background_tasks: BackgroundTasks)
             inference_time_ms=(time.time() - start) * 1000,
             success=False,
         )
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @app.get("/metrics")

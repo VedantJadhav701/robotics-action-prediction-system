@@ -9,7 +9,6 @@ import logging
 import sys
 import time
 from datetime import datetime
-from typing import Optional
 
 import numpy as np
 import torch
@@ -220,7 +219,7 @@ app.add_middleware(
 )
 
 # Global inference engine
-engine: Optional[ProductionRoboticsInferenceEngine] = None
+engine: ProductionRoboticsInferenceEngine | None = None
 MODEL_VERSION = "1.0.0-prod"
 
 # Request/response tracking
@@ -367,7 +366,7 @@ async def predict(request: PredictionRequest):
         stats["failed_requests"] += 1
         prediction_errors.labels(error_type="inference_error").inc()
         logger.error(f"Prediction error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     finally:
         # Decrement active requests
@@ -445,7 +444,7 @@ async def predict_batch(request: BatchPredictionRequest):
 
     except Exception as e:
         logger.error(f"Batch prediction error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @app.get("/metrics")

@@ -124,7 +124,7 @@ def load_parquet_files(
     if not parquet_dir.exists():
         raise FileNotFoundError(f"Parquet directory not found: {parquet_dir}")
 
-    parquet_files = sorted(list(parquet_dir.glob("*.parquet")))
+    parquet_files = sorted(parquet_dir.glob("*.parquet"))
 
     if not parquet_files:
         raise FileNotFoundError(f"No parquet files found in {parquet_dir}")
@@ -143,7 +143,7 @@ def load_parquet_files(
     obs_dim = None
     valid_obs_dims = None  # Track which obs dimensions are valid
 
-    for file_idx, parquet_file in enumerate(tqdm(parquet_files, desc="Loading parquet files")):
+    for _, parquet_file in enumerate(tqdm(parquet_files, desc="Loading parquet files")):
         try:
             df = pd.read_parquet(parquet_file)
 
@@ -252,7 +252,9 @@ def load_parquet_files(
     # all_obs_sequences = []
     all_trajectory_ids = []
 
-    for traj_id, (actions, observations) in enumerate(zip(actions_list, observations_list)):
+    for traj_id, (actions, observations) in enumerate(
+        zip(actions_list, observations_list, strict=True)
+    ):
         trajectory_len = len(actions)
 
         # Extract all overlapping sequences of length sequence_length
