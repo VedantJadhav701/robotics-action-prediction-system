@@ -47,10 +47,12 @@ data/raw/*
 data/processed/*
 !data/processed/.gitkeep
 
-# Models (use DVC for versioning)
-models/*.pt
-models/*.pth
-models/*.onnx
+# Models (use DVC for versioning in future)
+# For production deployment, we need models in the repository
+# Committed models: best.pt, normalization_stats.json, action_mask.npy
+# Large checkpoint files are still ignored
+models/checkpoint*.pt
+models/checkpoint*.pth
 !models/.gitkeep
 
 # Logs
