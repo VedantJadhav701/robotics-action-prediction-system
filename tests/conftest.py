@@ -45,7 +45,6 @@ def model(device):
         hidden_dim=128,
         num_layers=3,
         dropout=0.2,
-        device=device,
     )
     model.to(device)
     model.eval()

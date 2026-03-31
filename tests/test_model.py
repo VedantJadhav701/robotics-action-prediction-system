@@ -15,7 +15,8 @@ class TestRoboticsLSTMModel:
         assert model.obs_dim == 12
         assert model.hidden_dim == 128
         assert model.num_layers == 3
-        assert str(model.device) == device
+        # Model should be on eval mode
+        assert not model.training
 
     def test_model_forward_pass(
         self, model, sample_action_sequence, sample_observation_sequence, device
