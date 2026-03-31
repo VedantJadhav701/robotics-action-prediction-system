@@ -9,11 +9,17 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Configure pip for better reliability
+RUN pip config set global.index-url https://pypi.org/simple/ && \
+    pip config set global.retries 5 && \
+    pip config set global.timeout 120
+
 # Copy requirements
 COPY requirements-prod.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements-prod.txt
+# Install Python dependencies with retry
+RUN pip install --no-cache-dir --default-timeout=120 -r requirements-prod.txt || \
+    pip install --no-cache-dir --default-timeout=120 -r requirements-prod.txt
 
 # Copy application code
 COPY . .
