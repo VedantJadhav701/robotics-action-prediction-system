@@ -1,0 +1,75 @@
+name: MLOps Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov flake8
+    
+    - name: Lint with flake8
+      run: |
+        # Stop build on style errors
+        flake8 src app --count --show-source --statistics
+    
+    - name: Run tests
+      run: |
+        pytest tests/ --cov=src --cov=app
+    
+    - name: Upload coverage
+      uses: codecov/codecov-action@v2
+      with:
+        files: ./coverage.xml
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Build Docker image
+      run: |
+        docker build -t robotics-ai:${{ github.sha }} .
+        docker tag robotics-ai:${{ github.sha }} robotics-ai:latest
+    
+    - name: Test Docker image
+      run: |
+        docker run --rm robotics-ai:latest python -c "import torch; print(f'PyTorch: {torch.__version__}')"
+    
+    - name: Push to registry (if main)
+      if: github.ref == 'refs/heads/main'
+      run: |
+        echo "Would push to Docker registry"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Deploy to production
+      run: |
+        echo "✅ Deployment would happen here"
+        echo "   - Update model weights"
+        echo "   - Restart API containers"
+        echo "   - Run health checks"

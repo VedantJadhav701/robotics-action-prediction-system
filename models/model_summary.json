@@ -1,0 +1,28 @@
+{
+  "model_name": "RoboticsLSTM",
+  "description": "LSTM model for predicting next robot action from state/action sequences",
+  "architecture": {
+    "action_dim": 7,
+    "obs_dim": 19,
+    "hidden_dim": 64,
+    "num_layers": 2,
+    "dropout": 0.3,
+    "bidirectional": false
+  },
+  "training": {
+    "best_epoch": 3,
+    "best_val_loss": 1.0066134824162036,
+    "final_train_loss": 1.0049827612770927,
+    "final_val_loss": 1.0066134824162036
+  },
+  "evaluation": {
+    "mse": 1.0192736387252808,
+    "rmse": 1.0095908641815186,
+    "mae": 0.8040856122970581
+  },
+  "files": {
+    "checkpoint": "models/best.pt",
+    "logs": "logs/training_logs.json",
+    "onnx": "models\\robotics_lstm.onnx"
+  }
+}
