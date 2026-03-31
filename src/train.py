@@ -2,14 +2,15 @@
 Training pipeline for robotics LSTM with NaN prevention
 """
 
+import json
+import os
+import time
+from pathlib import Path
+
 import torch
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from pathlib import Path
-import time
 from tqdm import tqdm
-import json
-import os
 
 
 class Trainer:
@@ -17,10 +18,20 @@ class Trainer:
     Training orchestrator for robotics LSTM model with robust NaN handling
     """
 
-    def __init__(self, device='cpu', batch_size=16, learning_rate=1e-3,
-                 weight_decay=1e-5, epochs=20, sequence_length=10,
-                 hidden_dim=128, num_layers=3, max_grad_norm=1.0,
-                 save_dir='./models', log_dir='./logs'):
+    def __init__(
+        self,
+        device="cpu",
+        batch_size=16,
+        learning_rate=1e-3,
+        weight_decay=1e-5,
+        epochs=20,
+        sequence_length=10,
+        hidden_dim=128,
+        num_layers=3,
+        max_grad_norm=1.0,
+        save_dir="./models",
+        log_dir="./logs",
+    ):
         """
         Args:
             device: 'cuda' or 'cpu'
@@ -60,21 +71,21 @@ class Trainer:
         # Training state
         self.train_losses = []
         self.val_losses = []
-        self.best_val_loss = float('inf')
+        self.best_val_loss = float("inf")
         self.best_epoch = -1
         self.start_time = None
         self.nan_count = 0
 
     def create_model(self, action_dim, obs_dim, loss_fn):
         """Create model with given dimensions"""
-        from model import RoboticsLSTM, RoboticsLoss
+        from model import RoboticsLoss, RoboticsLSTM
 
         self.model = RoboticsLSTM(
             action_dim=action_dim,
             obs_dim=obs_dim,
             hidden_dim=self.hidden_dim,
             num_layers=self.num_layers,
-            dropout=0.3
+            dropout=0.3,
         ).to(self.device)
 
         self.loss_fn = loss_fn if loss_fn is not None else RoboticsLoss()
@@ -85,16 +96,14 @@ class Trainer:
             lr=self.learning_rate,
             weight_decay=self.weight_decay,
             eps=1e-8,
-            betas=(0.9, 0.999)
+            betas=(0.9, 0.999),
         )
 
         # Scheduler
         self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs)
 
         # Count parameters
-        params = sum(
-            p.numel() for p in self.model.parameters() if p.requires_grad
-        )
+        params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         print("\\n🧠 Model Statistics:")
         print(f"   Parameters: {params:,}")
         print(f"   Device: {self.device}")
@@ -111,13 +120,12 @@ class Trainer:
         for batch_idx, batch in enumerate(pbar):
             try:
                 # Move to device
-                action_seq = batch['action_seq'].to(self.device)
-                obs_seq = batch['obs_seq'].to(self.device)
-                next_action = batch['next_action'].to(self.device)
+                action_seq = batch["action_seq"].to(self.device)
+                obs_seq = batch["obs_seq"].to(self.device)
+                next_action = batch["next_action"].to(self.device)
 
                 # Validate inputs
-                if (torch.isnan(action_seq).any() or
-                        torch.isnan(obs_seq).any()):
+                if torch.isnan(action_seq).any() or torch.isnan(obs_seq).any():
                     msg = f"⚠️  NaN detected in batch {batch_idx}"
                     print(msg + ", skipping...")
                     continue
@@ -146,9 +154,7 @@ class Trainer:
                 loss.backward()
 
                 # Gradient clipping
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(), self.max_grad_norm
-                )
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
 
                 # Optimizer step
                 self.optimizer.step()
@@ -156,7 +162,7 @@ class Trainer:
                 # Update metrics
                 total_loss += loss.item()
                 num_batches += 1
-                pbar.set_postfix({'loss': f'{loss.item():.6f}'})
+                pbar.set_postfix({"loss": f"{loss.item():.6f}"})
 
             except Exception as e:
                 print(f"⚠️  Error at batch {batch_idx}: {str(e)}")
@@ -164,7 +170,7 @@ class Trainer:
 
         avg_loss = total_loss / max(num_batches, 1)
         if num_batches == 0:
-            avg_loss = float('inf')
+            avg_loss = float("inf")
 
         return avg_loss
 
@@ -178,9 +184,9 @@ class Trainer:
             pbar = tqdm(val_loader, desc="Validating")
             for batch in pbar:
                 try:
-                    action_seq = batch['action_seq'].to(self.device)
-                    obs_seq = batch['obs_seq'].to(self.device)
-                    next_action = batch['next_action'].to(self.device)
+                    action_seq = batch["action_seq"].to(self.device)
+                    obs_seq = batch["obs_seq"].to(self.device)
+                    next_action = batch["next_action"].to(self.device)
 
                     # Forward pass
                     pred_action, _ = self.model(action_seq, obs_seq)
@@ -192,7 +198,7 @@ class Trainer:
                         total_loss += loss.item()
                         num_batches += 1
 
-                    pbar.set_postfix({'loss': f'{loss.item():.6f}'})
+                    pbar.set_postfix({"loss": f"{loss.item():.6f}"})
 
                 except Exception as e:
                     print(f"⚠️  Validation error: {str(e)}")
@@ -200,7 +206,7 @@ class Trainer:
 
         avg_loss = total_loss / max(num_batches, 1)
         if num_batches == 0:
-            avg_loss = float('inf')
+            avg_loss = float("inf")
 
         return avg_loss
 
@@ -215,13 +221,13 @@ class Trainer:
             obs_dim: Observation dimension
             loss_fn: Loss function (optional)
         """
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("🚀 STARTING ROBOTICS LSTM TRAINING")
-        print("="*60)
+        print("=" * 60)
         print(f"Epochs: {self.epochs}")
         print(f"Batch size: {self.batch_size}")
         print(f"Device: {self.device}")
-        print("="*60 + "\n")
+        print("=" * 60 + "\n")
 
         self.start_time = time.time()
 
@@ -255,13 +261,13 @@ class Trainer:
             if val_loss < self.best_val_loss:
                 self.best_val_loss = val_loss
                 self.best_epoch = epoch
-                best_path = self.save_dir / 'best.pt'
+                best_path = self.save_dir / "best.pt"
                 self._save_checkpoint(best_path, epoch, val_loss)
                 print(f"   ✓ Best model saved: {best_path}")
 
             # Save checkpoint every 5 epochs
             if (epoch + 1) % 5 == 0:
-                ckpt_path = self.save_dir / f'checkpoint_epoch_{epoch+1}.pt'
+                ckpt_path = self.save_dir / f"checkpoint_epoch_{epoch+1}.pt"
                 self._save_checkpoint(ckpt_path, epoch, val_loss)
 
         # Training complete
@@ -275,33 +281,34 @@ class Trainer:
 
     def _save_checkpoint(self, path, epoch, val_loss):
         """Save checkpoint"""
-        torch.save({
-            'epoch': epoch,
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'scheduler_state_dict': self.scheduler.state_dict(),
-            'val_loss': val_loss,
-        }, path)
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+                "scheduler_state_dict": self.scheduler.state_dict(),
+                "val_loss": val_loss,
+            },
+            path,
+        )
 
     def _save_logs(self):
         """Save training logs"""
         logs = {
-            'epochs': self.epochs,
-            'batch_size': self.batch_size,
-            'learning_rate': self.learning_rate,
-            'hidden_dim': self.hidden_dim,
-            'num_layers': self.num_layers,
-            'best_epoch': self.best_epoch + 1,
-            'best_val_loss': float(self.best_val_loss),
-            'final_train_loss': float(self.train_losses[-1])
-            if self.train_losses else None,
-            'final_val_loss': float(self.val_losses[-1])
-            if self.val_losses else None,
-            'training_time_minutes': (time.time() - self.start_time) / 60,
+            "epochs": self.epochs,
+            "batch_size": self.batch_size,
+            "learning_rate": self.learning_rate,
+            "hidden_dim": self.hidden_dim,
+            "num_layers": self.num_layers,
+            "best_epoch": self.best_epoch + 1,
+            "best_val_loss": float(self.best_val_loss),
+            "final_train_loss": (float(self.train_losses[-1]) if self.train_losses else None),
+            "final_val_loss": float(self.val_losses[-1]) if self.val_losses else None,
+            "training_time_minutes": (time.time() - self.start_time) / 60,
         }
 
-        log_path = self.log_dir / 'training_logs.json'
-        with open(log_path, 'w') as f:
+        log_path = self.log_dir / "training_logs.json"
+        with open(log_path, "w") as f:
             json.dump(logs, f, indent=2)
 
         print(f"✓ Logs saved: {log_path}")

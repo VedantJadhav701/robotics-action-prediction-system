@@ -12,8 +12,7 @@ class RoboticsLSTM(nn.Module):
     LSTM model for robotics with stable training properties
     """
 
-    def __init__(self, action_dim, obs_dim, hidden_dim=64,
-                 num_layers=2, dropout=0.3):
+    def __init__(self, action_dim, obs_dim, hidden_dim=64, num_layers=2, dropout=0.3):
         super().__init__()
 
         self.action_dim = action_dim
@@ -33,7 +32,7 @@ class RoboticsLSTM(nn.Module):
             hidden_size=hidden_dim,
             num_layers=num_layers,
             dropout=dropout if num_layers > 1 else 0.0,
-            batch_first=True
+            batch_first=True,
         )
 
         # Output projection with layer norm
@@ -47,11 +46,11 @@ class RoboticsLSTM(nn.Module):
         """Initialize weights with orthogonal initialization for LSTM"""
         # Initialize LSTM weights
         for name, param in self.lstm.named_parameters():
-            if 'weight_ih' in name:
+            if "weight_ih" in name:
                 init.orthogonal_(param, gain=1.0)
-            elif 'weight_hh' in name:
+            elif "weight_hh" in name:
                 init.orthogonal_(param, gain=1.0)
-            elif 'bias' in name:
+            elif "bias" in name:
                 nn.init.constant_(param, 0.1)
 
         # Initialize linear layers
@@ -111,7 +110,7 @@ class RoboticsLoss(nn.Module):
     Stable loss function for robotics
     """
 
-    def __init__(self, reduction='mean'):
+    def __init__(self, reduction="mean"):
         super().__init__()
         self.reduction = reduction
         self.mse_loss = nn.MSELoss(reduction=reduction)

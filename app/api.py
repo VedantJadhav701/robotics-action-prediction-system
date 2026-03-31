@@ -11,16 +11,15 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from src.model import RoboticsLSTM  # noqa: E402
-from src.monitoring import (  # noqa: E402
-    MetricsCollector, PerformanceMonitor)
+from src.monitoring import MetricsCollector, PerformanceMonitor  # noqa: E402
 
 # ============================================================================
 # Setup
@@ -28,7 +27,7 @@ from src.monitoring import (  # noqa: E402
 app = FastAPI(
     title="PhysicalAI Robotics Action Prediction",
     description="Production inference engine for robot action prediction",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # Add CORS
@@ -79,12 +78,14 @@ class HealthResponse(BaseModel):
 class ProductionInferenceEngine:
     """Production-grade inference with validation"""
 
-    def __init__(self, model_path='./models/best.pt',
-                 action_mask_path='./models/action_mask.npy',
-                 norm_stats_path='./models/normalization_stats.json',
-                 device=None):
-        self.device = (device or
-                       ('cuda' if torch.cuda.is_available() else 'cpu'))
+    def __init__(
+        self,
+        model_path="./models/best.pt",
+        action_mask_path="./models/action_mask.npy",
+        norm_stats_path="./models/normalization_stats.json",
+        device=None,
+    ):
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
         # Load mask
         self.action_mask = np.load(action_mask_path)
@@ -95,30 +96,28 @@ class ProductionInferenceEngine:
         with open(norm_stats_path) as f:
             stats = json.load(f)
 
-        self.action_min = np.array(stats['action_bounds']['min'])
-        self.action_max = np.array(stats['action_bounds']['max'])
-        self.obs_min = np.array(stats['obs_bounds']['min'])
-        self.obs_max = np.array(stats['obs_bounds']['max'])
-        self.obs_dim = stats['obs_dim']
+        self.action_min = np.array(stats["action_bounds"]["min"])
+        self.action_max = np.array(stats["action_bounds"]["max"])
+        self.obs_min = np.array(stats["obs_bounds"]["min"])
+        self.obs_max = np.array(stats["obs_bounds"]["max"])
+        self.obs_dim = stats["obs_dim"]
 
         # Ranges
         self.action_range = self.action_max - self.action_min
         self.obs_range = self.obs_max - self.obs_min
-        self.action_range = np.where(
-            self.action_range < 1e-8, 1.0, self.action_range)
-        self.obs_range = np.where(
-            self.obs_range < 1e-8, 1.0, self.obs_range)
+        self.action_range = np.where(self.action_range < 1e-8, 1.0, self.action_range)
+        self.obs_range = np.where(self.obs_range < 1e-8, 1.0, self.obs_range)
 
         # Model
         self.model = RoboticsLSTM(
             action_dim=self.full_action_dim,
             obs_dim=self.obs_dim,
             hidden_dim=128,
-            num_layers=3
+            num_layers=3,
         ).to(self.device)
 
         checkpoint = torch.load(model_path, map_location=self.device)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.model.load_state_dict(checkpoint["model_state_dict"])
         self.model.eval()
 
         logger.info("✅ Production engine initialized")
@@ -144,11 +143,10 @@ class ProductionInferenceEngine:
             raise ValueError("Invalid observation sequence (NaN/Inf)")
 
         # Normalize
-        action_norm = (2.0 * (action_seq - self.action_min) /
-                       self.action_range - 1.0)
+        action_norm = 2.0 * (action_seq - self.action_min) / self.action_range - 1.0
         action_norm = np.clip(action_norm, -1.0, 1.0)
 
-        obs_norm = (2.0 * (obs_seq - self.obs_min) / self.obs_range - 1.0)
+        obs_norm = 2.0 * (obs_seq - self.obs_min) / self.obs_range - 1.0
         obs_norm = np.clip(obs_norm, -1.0, 1.0)
 
         # Forward pass
@@ -180,7 +178,7 @@ engine = None
 def init_engine():
     global engine
     try:
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         engine = ProductionInferenceEngine(device=device)
         logger.info("✅ Engine initialized successfully")
     except Exception as e:
@@ -205,29 +203,25 @@ async def health():
         "status": "healthy" if engine else "initializing",
         "model_loaded": engine is not None,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "version": "1.0.0"
+        "version": "1.0.0",
     }
 
 
 @app.post("/predict", response_model=PredictionResponse)
-async def predict(request: PredictionRequest,
-                  background_tasks: BackgroundTasks):
+async def predict(request: PredictionRequest, background_tasks: BackgroundTasks):
     """Make prediction"""
     if not engine:
         raise HTTPException(status_code=503, detail="Engine not initialized")
 
-    import uuid
     import time
+    import uuid
 
     request_id = str(uuid.uuid4())
     start = time.time()
 
     try:
         # Predict
-        pred = engine.predict(
-            request.action_sequence,
-            request.observation_sequence
-        )
+        pred = engine.predict(request.action_sequence, request.observation_sequence)
 
         inference_time = (time.time() - start) * 1000
 
@@ -236,7 +230,7 @@ async def predict(request: PredictionRequest,
             metrics.log_prediction,
             request_id=request_id,
             inference_time_ms=inference_time,
-            success=True
+            success=True,
         )
 
         return {
@@ -244,7 +238,7 @@ async def predict(request: PredictionRequest,
             "confidence": float(np.mean(np.abs(pred))),
             "inference_time_ms": inference_time,
             "timestamp": datetime.now().isoformat(),
-            "request_id": request_id
+            "request_id": request_id,
         }
 
     except Exception as e:
@@ -253,7 +247,7 @@ async def predict(request: PredictionRequest,
             metrics.log_prediction,
             request_id=request_id,
             inference_time_ms=(time.time() - start) * 1000,
-            success=False
+            success=False,
         )
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -275,10 +269,12 @@ async def docs():
             "POST /predict": "Make action prediction",
             "GET /health": "Health check",
             "GET /metrics": "Performance metrics",
-            "GET /docs": "This documentation"
-        }
+            "GET /docs": "This documentation",
+        },
     }
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

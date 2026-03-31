@@ -2,13 +2,14 @@
 Data loader for robotics LSTM with robust normalization and validation
 """
 
-import torch
-from torch.utils.data import Dataset, DataLoader
+import json
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
+import torch
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-import json
 
 
 class RoboticsSequenceDataset(Dataset):
@@ -16,8 +17,17 @@ class RoboticsSequenceDataset(Dataset):
     Dataset for robotics sequences with robust normalization
     """
 
-    def __init__(self, action_sequences, obs_sequences, next_actions,
-                 action_dim, obs_dim, normalize=True, action_bounds=None, obs_bounds=None):
+    def __init__(
+        self,
+        action_sequences,
+        obs_sequences,
+        next_actions,
+        action_dim,
+        obs_dim,
+        normalize=True,
+        action_bounds=None,
+        obs_bounds=None,
+    ):
         # action_sequences: (num_seq, seq_len, action_dim)
         # obs_sequences: (num_seq, seq_len, obs_dim)
         # next_actions: (num_seq, action_dim)
@@ -76,7 +86,9 @@ class RoboticsSequenceDataset(Dataset):
         self.obs_sequences = np.clip(self.obs_sequences, -1.0, 1.0)
 
         # Remove any remaining NaN/Inf
-        self.action_sequences = np.nan_to_num(self.action_sequences, nan=0.0, posinf=1.0, neginf=-1.0)
+        self.action_sequences = np.nan_to_num(
+            self.action_sequences, nan=0.0, posinf=1.0, neginf=-1.0
+        )
         self.obs_sequences = np.nan_to_num(self.obs_sequences, nan=0.0, posinf=1.0, neginf=-1.0)
         self.next_actions = np.nan_to_num(self.next_actions, nan=0.0, posinf=1.0, neginf=-1.0)
 
@@ -85,13 +97,15 @@ class RoboticsSequenceDataset(Dataset):
 
     def __getitem__(self, idx):
         return {
-            'action_seq': torch.from_numpy(self.action_sequences[idx].astype(np.float32)),
-            'obs_seq': torch.from_numpy(self.obs_sequences[idx].astype(np.float32)),
-            'next_action': torch.from_numpy(self.next_actions[idx].astype(np.float32)),
+            "action_seq": torch.from_numpy(self.action_sequences[idx].astype(np.float32)),
+            "obs_seq": torch.from_numpy(self.obs_sequences[idx].astype(np.float32)),
+            "next_action": torch.from_numpy(self.next_actions[idx].astype(np.float32)),
         }
 
 
-def load_parquet_files(parquet_dir, max_samples=None, sequence_length=10, return_trajectory_ids=False):
+def load_parquet_files(
+    parquet_dir, max_samples=None, sequence_length=10, return_trajectory_ids=False
+):
     """
     Load robotics trajectories from parquet files with validation
 
@@ -110,7 +124,7 @@ def load_parquet_files(parquet_dir, max_samples=None, sequence_length=10, return
     if not parquet_dir.exists():
         raise FileNotFoundError(f"Parquet directory not found: {parquet_dir}")
 
-    parquet_files = sorted(list(parquet_dir.glob('*.parquet')))
+    parquet_files = sorted(list(parquet_dir.glob("*.parquet")))
 
     if not parquet_files:
         raise FileNotFoundError(f"No parquet files found in {parquet_dir}")
@@ -129,15 +143,12 @@ def load_parquet_files(parquet_dir, max_samples=None, sequence_length=10, return
     obs_dim = None
     valid_obs_dims = None  # Track which obs dimensions are valid
 
-    for file_idx, parquet_file in enumerate(
-        tqdm(parquet_files, desc="Loading parquet files")
-    ):
+    for file_idx, parquet_file in enumerate(tqdm(parquet_files, desc="Loading parquet files")):
         try:
             df = pd.read_parquet(parquet_file)
 
             # Check for required columns
-            if ('action' not in df.columns or
-                    'observation.state' not in df.columns):
+            if "action" not in df.columns or "observation.state" not in df.columns:
                 continue
 
             # Each parquet file is ONE trajectory with multiple timesteps
@@ -146,8 +157,8 @@ def load_parquet_files(parquet_dir, max_samples=None, sequence_length=10, return
             observations_trajectory = []
 
             for idx in range(len(df)):
-                action_val = df.iloc[idx]['action']
-                obs_val = df.iloc[idx]['observation.state']
+                action_val = df.iloc[idx]["action"]
+                obs_val = df.iloc[idx]["observation.state"]
 
                 # Convert to numpy array if needed
                 if isinstance(action_val, (list, tuple)):
@@ -195,9 +206,11 @@ def load_parquet_files(parquet_dir, max_samples=None, sequence_length=10, return
                 if obs_dim < observations.shape[1]:
                     obs_total = observations.shape[1]
                     obs_nan = obs_total - obs_dim
-                    msg = (f"\u26a0\ufe0f  Using {obs_dim}/{obs_total} "
-                           f"observation dimensions "
-                           f"({obs_nan} always-NaN)")
+                    msg = (
+                        f"\u26a0\ufe0f  Using {obs_dim}/{obs_total} "
+                        f"observation dimensions "
+                        f"({obs_nan} always-NaN)"
+                    )
                     print(msg)
 
             # Filter observations to valid dimensions
@@ -239,17 +252,15 @@ def load_parquet_files(parquet_dir, max_samples=None, sequence_length=10, return
     # all_obs_sequences = []
     all_trajectory_ids = []
 
-    for traj_id, (actions, observations) in enumerate(
-            zip(actions_list, observations_list)
-    ):
+    for traj_id, (actions, observations) in enumerate(zip(actions_list, observations_list)):
         trajectory_len = len(actions)
 
         # Extract all overlapping sequences of length sequence_length
         for start_idx in range(trajectory_len - sequence_length):
             # Get sequence of length sequence_length
             # and the next action as target
-            action_seq = actions[start_idx:start_idx + sequence_length]
-            obs_seq = observations[start_idx:start_idx + sequence_length]
+            action_seq = actions[start_idx : start_idx + sequence_length]
+            obs_seq = observations[start_idx : start_idx + sequence_length]
             next_action = actions[start_idx + sequence_length]
 
             all_action_sequences.append((action_seq, obs_seq, next_action))
@@ -262,37 +273,55 @@ def load_parquet_files(parquet_dir, max_samples=None, sequence_length=10, return
     action_sequences = np.array(
         [s[0] for s in all_action_sequences]
     )  # (num_seq, seq_len, action_dim)
-    obs_sequences = np.array(
-        [s[1] for s in all_action_sequences]
-    )  # (num_seq, seq_len, obs_dim)
-    next_actions = np.array(
-        [s[2] for s in all_action_sequences]
-    )  # (num_seq, action_dim)
+    obs_sequences = np.array([s[1] for s in all_action_sequences])  # (num_seq, seq_len, obs_dim)
+    next_actions = np.array([s[2] for s in all_action_sequences])  # (num_seq, action_dim)
 
     # Create a modified sequences array that stores sequence
     # length for each sample
-    sequences_array = np.full(
-        len(all_action_sequences), sequence_length, dtype=np.int32
-    )
+    sequences_array = np.full(len(all_action_sequences), sequence_length, dtype=np.int32)
 
-    msg = (f"\u2713 Extracted {len(all_action_sequences)} sequences "
-           f"from {len(actions_list)} trajectories")
+    msg = (
+        f"\u2713 Extracted {len(all_action_sequences)} sequences "
+        f"from {len(actions_list)} trajectories"
+    )
     print(msg)
-    msg2 = (f"  Action sequence shape: {action_sequences.shape}, "
-            f"Obs sequence shape: {obs_sequences.shape}")
+    msg2 = (
+        f"  Action sequence shape: {action_sequences.shape}, "
+        f"Obs sequence shape: {obs_sequences.shape}"
+    )
     print(msg2)
 
     if return_trajectory_ids:
-        return (sequences_array, action_sequences, obs_sequences,
-                next_actions, action_dim, obs_dim,
-                np.array(all_trajectory_ids))
+        return (
+            sequences_array,
+            action_sequences,
+            obs_sequences,
+            next_actions,
+            action_dim,
+            obs_dim,
+            np.array(all_trajectory_ids),
+        )
     else:
-        return sequences_array, action_sequences, obs_sequences, next_actions, action_dim, obs_dim
+        return (
+            sequences_array,
+            action_sequences,
+            obs_sequences,
+            next_actions,
+            action_dim,
+            obs_dim,
+        )
 
 
-def create_dataloaders(batch_size=16, sequence_length=10, num_workers=0,
-                       max_samples=None, data_dir='./data/raw',
-                       test_split=0.2, normalize=True, trajectory_split=True):
+def create_dataloaders(
+    batch_size=16,
+    sequence_length=10,
+    num_workers=0,
+    max_samples=None,
+    data_dir="./data/raw",
+    test_split=0.2,
+    normalize=True,
+    trajectory_split=True,
+):
     """
     Create train/val dataloaders with proper normalization
 
@@ -311,10 +340,19 @@ def create_dataloaders(batch_size=16, sequence_length=10, num_workers=0,
     """
     # Load data - returns pre-extracted sequences
     if trajectory_split:
-        sequences, action_seqs, obs_seqs, next_actions, action_dim, obs_dim, traj_ids = load_parquet_files(
-            data_dir, max_samples=max_samples,
+        (
+            sequences,
+            action_seqs,
+            obs_seqs,
+            next_actions,
+            action_dim,
+            obs_dim,
+            traj_ids,
+        ) = load_parquet_files(
+            data_dir,
+            max_samples=max_samples,
             sequence_length=sequence_length,
-            return_trajectory_ids=True
+            return_trajectory_ids=True,
         )
 
         # Split by trajectory ID
@@ -331,8 +369,12 @@ def create_dataloaders(batch_size=16, sequence_length=10, num_workers=0,
         train_indices = np.where(~np.isin(traj_ids, list(val_traj_set)))[0]
         val_indices = np.where(np.isin(traj_ids, list(val_traj_set)))[0]
 
-        print(f"📊 Trajectory-based split: {len(train_indices)} train sequences, {len(val_indices)} val sequences")
-        print(f"   Train trajectories: {num_traj - val_traj_count}, Val trajectories: {val_traj_count}")
+        print(
+            f"📊 Trajectory-based split: {len(train_indices)} train sequences, {len(val_indices)} val sequences"
+        )
+        print(
+            f"   Train trajectories: {num_traj - val_traj_count}, Val trajectories: {val_traj_count}"
+        )
 
         # Reorder all sequences to have train first, then val
         all_indices = np.concatenate([train_indices, val_indices])
@@ -342,18 +384,17 @@ def create_dataloaders(batch_size=16, sequence_length=10, num_workers=0,
 
     else:
         sequences, action_seqs, obs_seqs, next_actions, action_dim, obs_dim = load_parquet_files(
-            data_dir, max_samples=max_samples,
+            data_dir,
+            max_samples=max_samples,
             sequence_length=sequence_length,
-            return_trajectory_ids=False
+            return_trajectory_ids=False,
         )
         train_indices = None
         val_indices = None
 
     # Create dataset with normalization
     dataset = RoboticsSequenceDataset(
-        action_seqs, obs_seqs, next_actions,
-        action_dim, obs_dim,
-        normalize=normalize
+        action_seqs, obs_seqs, next_actions, action_dim, obs_dim, normalize=normalize
     )
 
     dataset.action_dim = action_dim
@@ -365,10 +406,9 @@ def create_dataloaders(batch_size=16, sequence_length=10, num_workers=0,
         train_size = len(train_indices)
         val_size = len(val_indices)
         from torch.utils.data import Subset
+
         train_dataset = Subset(dataset, range(train_size))
-        val_dataset = Subset(
-            dataset, range(train_size, train_size + val_size)
-        )
+        val_dataset = Subset(dataset, range(train_size, train_size + val_size))
     else:
         # Random split
         num_samples = len(dataset)
@@ -376,19 +416,24 @@ def create_dataloaders(batch_size=16, sequence_length=10, num_workers=0,
         train_size = num_samples - val_size
 
         train_dataset, val_dataset = torch.utils.data.random_split(
-            dataset, [train_size, val_size],
-            generator=torch.Generator().manual_seed(42)
+            dataset, [train_size, val_size], generator=torch.Generator().manual_seed(42)
         )
 
     # Create dataloaders
     train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True,
-        num_workers=num_workers, pin_memory=True
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
     )
 
     val_loader = DataLoader(
-        val_dataset, batch_size=batch_size, shuffle=False,
-        num_workers=num_workers, pin_memory=True
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
     )
 
     print("\n📊 Data split:")
@@ -399,9 +444,7 @@ def create_dataloaders(batch_size=16, sequence_length=10, num_workers=0,
     return train_loader, val_loader, dataset
 
 
-def save_normalization_stats(
-    dataset, save_path='./models/normalization_stats.json'
-):
+def save_normalization_stats(dataset, save_path="./models/normalization_stats.json"):
     """
     Save normalization statistics to JSON for inference
 
@@ -410,35 +453,43 @@ def save_normalization_stats(
         save_path: Path to save JSON file
     """
     stats = {
-        'action_dim': dataset.action_dim,
-        'obs_dim': dataset.obs_dim,
-        'action_bounds': {
-            'min': (dataset.action_bounds[0].tolist()
-                    if hasattr(dataset.action_bounds[0], 'tolist')
-                    else list(dataset.action_bounds[0])),
-            'max': (dataset.action_bounds[1].tolist()
-                    if hasattr(dataset.action_bounds[1], 'tolist')
-                    else list(dataset.action_bounds[1]))
+        "action_dim": dataset.action_dim,
+        "obs_dim": dataset.obs_dim,
+        "action_bounds": {
+            "min": (
+                dataset.action_bounds[0].tolist()
+                if hasattr(dataset.action_bounds[0], "tolist")
+                else list(dataset.action_bounds[0])
+            ),
+            "max": (
+                dataset.action_bounds[1].tolist()
+                if hasattr(dataset.action_bounds[1], "tolist")
+                else list(dataset.action_bounds[1])
+            ),
         },
-        'obs_bounds': {
-            'min': (dataset.obs_bounds[0].tolist()
-                    if hasattr(dataset.obs_bounds[0], 'tolist')
-                    else list(dataset.obs_bounds[0])),
-            'max': (dataset.obs_bounds[1].tolist()
-                    if hasattr(dataset.obs_bounds[1], 'tolist')
-                    else list(dataset.obs_bounds[1]))
-        }
+        "obs_bounds": {
+            "min": (
+                dataset.obs_bounds[0].tolist()
+                if hasattr(dataset.obs_bounds[0], "tolist")
+                else list(dataset.obs_bounds[0])
+            ),
+            "max": (
+                dataset.obs_bounds[1].tolist()
+                if hasattr(dataset.obs_bounds[1], "tolist")
+                else list(dataset.obs_bounds[1])
+            ),
+        },
     }
 
     Path(save_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(save_path, 'w') as f:
+    with open(save_path, "w") as f:
         json.dump(stats, f, indent=2)
 
     print(f"✓ Normalization stats saved to {save_path}")
     return stats
 
 
-def load_normalization_stats(stats_path='./models/normalization_stats.json'):
+def load_normalization_stats(stats_path="./models/normalization_stats.json"):
     """
     Load normalization statistics from JSON
 
@@ -448,17 +499,17 @@ def load_normalization_stats(stats_path='./models/normalization_stats.json'):
     Returns:
         dict: Normalization statistics
     """
-    with open(stats_path, 'r') as f:
+    with open(stats_path) as f:
         stats = json.load(f)
 
     # Convert lists back to numpy arrays
-    stats['action_bounds'] = (
-        np.array(stats['action_bounds']['min']),
-        np.array(stats['action_bounds']['max'])
+    stats["action_bounds"] = (
+        np.array(stats["action_bounds"]["min"]),
+        np.array(stats["action_bounds"]["max"]),
     )
-    stats['obs_bounds'] = (
-        np.array(stats['obs_bounds']['min']),
-        np.array(stats['obs_bounds']['max'])
+    stats["obs_bounds"] = (
+        np.array(stats["obs_bounds"]["min"]),
+        np.array(stats["obs_bounds"]["max"]),
     )
 
     print(f"✓ Normalization stats loaded from {stats_path}")
