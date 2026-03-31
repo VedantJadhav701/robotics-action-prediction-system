@@ -296,17 +296,25 @@ async def predict(request: PredictionRequest):
     stats["total_requests"] += 1
     start_time = time.time()
     
+    # Track active requests
+    active_requests.inc()
+    
     try:
+        # Increment request counter
+        request_count.labels(endpoint="/predict", method="POST").inc()
+        
         # Convert to numpy
         action_array = np.array(request.action_sequence.actions, dtype=np.float32)
         obs_array = np.array(request.observation_sequence.observations, dtype=np.float32)
         
-        # Predict
+        # Predict with timing
+        inference_start = time.time()
         next_action = engine.predict(
             action_array,
             obs_array,
             return_full_space=request.return_full_space
         )
+        inference_time = time.time() - inference_start
         
         latency_ms = (time.time() - start_time) * 1000
         stats["successful_predictions"] += 1
@@ -318,6 +326,10 @@ async def predict(request: PredictionRequest):
         
         stats["avg_latency_ms"] = np.mean(stats["latencies"])
         
+        # Record metrics
+        request_latency.labels(endpoint="/predict").observe(latency_ms / 1000.0)
+        model_inference_time.observe(inference_time)
+        
         return {
             "next_action": next_action.tolist(),
             "prediction_time_ms": latency_ms,
@@ -327,8 +339,13 @@ async def predict(request: PredictionRequest):
     
     except Exception as e:
         stats["failed_requests"] += 1
+        prediction_errors.labels(error_type="inference_error").inc()
         logger.error(f"Prediction error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+    
+    finally:
+        # Decrement active requests
+        active_requests.dec()
 
 @app.get("/stats")
 async def get_stats():
