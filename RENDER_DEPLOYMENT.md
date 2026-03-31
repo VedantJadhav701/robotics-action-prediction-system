@@ -15,17 +15,22 @@ Complete guide to deploy your PhysicalAI Robotics Action Prediction system on Re
 1. Go to [render.com](https://render.com) and sign up
 2. Navigate to **Account Settings** → **API Tokens**
 3. Click "Create API Token"
-4. Copy the token (you'll need this in Step 4)
+4. Copy the token (optional - only needed for manual API control)
 
-**⚠️ Important: Model Files**
+**✅ Production Models Included**
 
-Your Docker image includes the model files from `./models/` directory:
-- ✅ `best.pt` - Main production model
+Your GitHub repository now includes the production model files:
+- ✅ `best.pt` - Main production model (5.7 MB)
 - ✅ `normalization_stats.json` - Data normalization parameters
-- ✅ `action_mask.npy` - Action filtering mask
+- ✅ `action_mask.npy` - Action dimension filtering mask
 - ✅ `action_dimension_metadata.json` - Action metadata
+- ✅ `robotics_lstm.onnx` - ONNX format export
+- ✅ `model_summary.json` - Model configuration
 
-These are automatically included in the Docker build via `COPY models/ ./models/`
+**These are automatically included in:**
+- GitHub repository ✅
+- Docker build via `COPY models/ ./models/` ✅
+- Render deployment via cloned repository ✅
 
 ### Step 2: Connect GitHub Repository
 
@@ -121,7 +126,49 @@ Expected response:
 https://robotics-action-prediction.onrender.com/docs
 ```
 
-## 🔧 Environment Variables
+## � Model Management
+
+### Current Strategy: Git-Based (Production)
+
+Models are committed directly to GitHub for production deployment:
+- **Advantages**: Simple, works with Render, version controlled
+- **Disadvantages**: Not ideal for very large models (>50MB)
+- **Files**: ~5.7 MB total (acceptable for git)
+
+### Directory Structure
+
+```
+models/
+├── best.pt                       # Production inference model (5.7 MB)
+├── normalization_stats.json      # Input/output normalization parameters
+├── action_mask.npy               # Binary mask for action filtering
+├── action_dimension_metadata.json # Action space metadata
+├── model_summary.json            # Architecture and hyperparameters
+├── robotics_lstm.onnx            # ONNX format export
+├── checkpoint_epoch_*.pt         # [IGNORED] Training checkpoints
+└── .gitkeep                       # Git placeholder
+```
+
+### Future Optimization: Alternative Strategies
+
+For models larger than 50MB, consider these alternatives:
+
+**Option 1: Git LFS (Large File Storage)**
+```bash
+git lfs install
+git lfs track "*.pt"
+```
+
+**Option 2: DVC (Data Version Control)**
+```bash
+dvc add models/best.pt
+dvc push  # Push to remote storage (S3, etc.)
+```
+
+**Option 3: S3 Download on Deploy**
+```dockerfile
+RUN wget https://s3.bucket.com/models/best.pt -O ./models/best.pt
+```
 
 The following are automatically configured:
 
