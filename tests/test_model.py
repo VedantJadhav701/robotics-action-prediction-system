@@ -30,7 +30,7 @@ class TestRoboticsLSTMModel:
         obs_tensor = obs_tensor.unsqueeze(0)  # (1, 15, 12)
 
         with torch.no_grad():
-            output = model(action_tensor, obs_tensor)
+            output, hidden_states = model(action_tensor, obs_tensor)
 
         # Output should be (batch_size, action_dim) = (1, 34)
         assert output.shape == (1, 34)
@@ -46,7 +46,7 @@ class TestRoboticsLSTMModel:
         observations = torch.randn(batch_size, seq_len, obs_dim).to(device)
 
         with torch.no_grad():
-            predictions = model(actions, observations)
+            predictions, _ = model(actions, observations)
 
         assert predictions.shape == (batch_size, action_dim)
 
@@ -56,13 +56,13 @@ class TestRoboticsLSTMModel:
             # Test 1: Single sequence
             actions1 = torch.randn(1, 15, 34).to(device)
             obs1 = torch.randn(1, 15, 12).to(device)
-            out1 = model(actions1, obs1)
+            out1, _ = model(actions1, obs1)
             assert out1.shape == (1, 34)
 
             # Test 2: Batch of 8
             actions2 = torch.randn(8, 15, 34).to(device)
             obs2 = torch.randn(8, 15, 12).to(device)
-            out2 = model(actions2, obs2)
+            out2, _ = model(actions2, obs2)
             assert out2.shape == (8, 34)
 
     def test_model_reproducibility(self, model, device):
@@ -72,10 +72,10 @@ class TestRoboticsLSTMModel:
         obs = torch.randn(2, 15, 12).to(device)
 
         with torch.no_grad():
-            output1 = model(actions, obs)
+            output1, _ = model(actions, obs)
 
         with torch.no_grad():
-            output2 = model(actions, obs)
+            output2, _ = model(actions, obs)
 
         # Should be identical
         assert torch.allclose(output1, output2, atol=1e-6)
