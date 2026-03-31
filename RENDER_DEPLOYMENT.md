@@ -52,13 +52,17 @@ These are automatically included in the Docker build via `COPY models/ ./models/
 - **Auto-Deploy**: Enable (redeploy on every push to main)
 - **Health Check**: `/health`
 
-### Step 4: Add GitHub Secrets
+### Step 4: (Optional) Add GitHub Secrets
 
-For automated deployment workflow, add these secrets to your GitHub repository:
+**Note:** Render has built-in auto-deploy from GitHub. When you enable "Auto-Deploy" in Render:
+
+1. Render automatically deploys when you push to the `main` branch
+2. No GitHub Secrets needed unless you want manual control
+3. GitHub Actions workflow is optional and informational only
+
+**If you want manual deployment control**, add these secrets to your GitHub repository:
 
 **Go to**: GitHub Repository → **Settings** → **Secrets and variables** → **Actions**
-
-Add these secrets:
 
 ```
 RENDER_SERVICE_ID=<your-render-service-id>

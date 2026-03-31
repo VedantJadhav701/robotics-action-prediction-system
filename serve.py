@@ -9,6 +9,7 @@ import logging
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -102,12 +103,23 @@ class ProductionRoboticsInferenceEngine:
 
     def __init__(
         self,
-        model_path="./models/best.pt",
-        action_mask_path="./models/action_mask.npy",
-        norm_stats_path="./models/normalization_stats.json",
+        model_path=None,
+        action_mask_path=None,
+        norm_stats_path=None,
         device=None,
     ):
         """Initialize production inference engine"""
+        # Resolve paths relative to script location (works in Docker)
+        base_dir = Path(__file__).parent / "models"
+        model_path = model_path or base_dir / "best.pt"
+        action_mask_path = action_mask_path or base_dir / "action_mask.npy"
+        norm_stats_path = norm_stats_path or base_dir / "normalization_stats.json"
+
+        # Convert to absolute paths
+        model_path = Path(model_path).resolve()
+        action_mask_path = Path(action_mask_path).resolve()
+        norm_stats_path = Path(norm_stats_path).resolve()
+
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
         # Load action dimension mask
