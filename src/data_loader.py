@@ -116,8 +116,9 @@ def load_parquet_files(
         return_trajectory_ids: If True, also return trajectory IDs for each sequence
 
     Returns:
-        tuple: (sequences, actions, observations, action_dim, obs_dim)
-        or (sequences, actions, observations, action_dim, obs_dim, trajectory_ids) if return_trajectory_ids=True
+        tuple: (sequences, actions, observations, action_dim, obs_dim) or
+        (sequences, actions, observations, action_dim, obs_dim, trajectory_ids)
+        if return_trajectory_ids=True
     """
     parquet_dir = Path(parquet_dir)
 
@@ -161,14 +162,14 @@ def load_parquet_files(
                 obs_val = df.iloc[idx]["observation.state"]
 
                 # Convert to numpy array if needed
-                if isinstance(action_val, (list, tuple)):
+                if isinstance(action_val, list | tuple):
                     action_val = np.array(action_val, dtype=np.float32)
                 elif not isinstance(action_val, np.ndarray):
                     action_val = np.array([action_val], dtype=np.float32)
                 else:
                     action_val = np.array(action_val, dtype=np.float32)
 
-                if isinstance(obs_val, (list, tuple)):
+                if isinstance(obs_val, list | tuple):
                     obs_val = np.array(obs_val, dtype=np.float32)
                 elif not isinstance(obs_val, np.ndarray):
                     obs_val = np.array([obs_val], dtype=np.float32)
@@ -371,12 +372,11 @@ def create_dataloaders(
         train_indices = np.where(~np.isin(traj_ids, list(val_traj_set)))[0]
         val_indices = np.where(np.isin(traj_ids, list(val_traj_set)))[0]
 
-        print(
-            f"📊 Trajectory-based split: {len(train_indices)} train sequences, {len(val_indices)} val sequences"
-        )
-        print(
-            f"   Train trajectories: {num_traj - val_traj_count}, Val trajectories: {val_traj_count}"
-        )
+        train_count = len(train_indices)
+        val_count = len(val_indices)
+        print(f"📊 Trajectory-based split: {train_count} train sequences, {val_count} val sequences")
+        train_traj = num_traj - val_traj_count
+        print(f"   Train trajectories: {train_traj}, Val trajectories: {val_traj_count}")
 
         # Reorder all sequences to have train first, then val
         all_indices = np.concatenate([train_indices, val_indices])
