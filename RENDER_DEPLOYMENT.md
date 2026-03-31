@@ -17,6 +17,16 @@ Complete guide to deploy your PhysicalAI Robotics Action Prediction system on Re
 3. Click "Create API Token"
 4. Copy the token (you'll need this in Step 4)
 
+**⚠️ Important: Model Files**
+
+Your Docker image includes the model files from `./models/` directory:
+- ✅ `best.pt` - Main production model
+- ✅ `normalization_stats.json` - Data normalization parameters
+- ✅ `action_mask.npy` - Action filtering mask
+- ✅ `action_dimension_metadata.json` - Action metadata
+
+These are automatically included in the Docker build via `COPY models/ ./models/`
+
 ### Step 2: Connect GitHub Repository
 
 1. Log in to Render Dashboard

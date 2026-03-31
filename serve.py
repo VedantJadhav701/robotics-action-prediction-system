@@ -25,9 +25,9 @@ from prometheus_client import (
 from pydantic import BaseModel, validator
 
 # Add src to path
-sys.path.insert(0, "./src")
+sys.path.insert(0, "./src")  # noqa: E402
 
-from model import RoboticsLSTM
+from model import RoboticsLSTM  # noqa: E402
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -273,9 +273,17 @@ async def startup_event():
         # Auto-detect device (CUDA if available, else CPU)
         engine = ProductionRoboticsInferenceEngine(device=None)
         logger.info("✅ Model loaded successfully on startup")
+    except FileNotFoundError as e:
+        logger.error(f"⚠️  Model file not found: {e}")
+        logger.error("   Ensure model files are included in Docker image")
+        logger.error("   Check COPY models/ command in Dockerfile")
+        # Don't crash - allow API to start in degraded mode
+        engine = None
     except Exception as e:
         logger.error(f"❌ Failed to load model: {e}")
-        raise
+        logger.error(f"   Error type: {type(e).__name__}")
+        # Allow startup to continue but log the error
+        engine = None
 
 
 @app.on_event("shutdown")

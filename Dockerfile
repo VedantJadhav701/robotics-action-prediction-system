@@ -14,15 +14,21 @@ RUN pip config set global.index-url https://pypi.org/simple/ && \
     pip config set global.retries 5 && \
     pip config set global.timeout 120
 
-# Copy requirements
+# Copy requirements first (for layer caching)
 COPY requirements-prod.txt .
 
 # Install Python dependencies with retry
 RUN pip install --no-cache-dir --default-timeout=120 -r requirements-prod.txt || \
     pip install --no-cache-dir --default-timeout=120 -r requirements-prod.txt
 
+# Copy model files (required for inference)
+COPY models/ ./models/
+
 # Copy application code
 COPY . .
+
+# Create logs directory
+RUN mkdir -p /app/logs
 
 # Expose port
 EXPOSE 8000
