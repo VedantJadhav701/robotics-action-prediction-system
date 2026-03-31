@@ -3,7 +3,6 @@ Training pipeline for robotics LSTM with NaN prevention
 """
 
 import torch
-import torch.nn as nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from pathlib import Path
@@ -18,9 +17,9 @@ class Trainer:
     Training orchestrator for robotics LSTM model with robust NaN handling
     """
     
-    def __init__(self, device='cpu', batch_size=16, learning_rate=1e-3, 
-                 weight_decay=1e-5, epochs=20, sequence_length=10, 
-                 hidden_dim=128, num_layers=3, max_grad_norm=1.0, 
+    def __init__(self, device='cpu', batch_size=16, learning_rate=1e-3,
+                 weight_decay=1e-5, epochs=20, sequence_length=10,
+                 hidden_dim=128, num_layers=3, max_grad_norm=1.0,
                  save_dir='./models', log_dir='./logs'):
         """
         Args:
@@ -93,8 +92,10 @@ class Trainer:
         self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs)
         
         # Count parameters
-        params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        print(f"\n🧠 Model Statistics:")
+        params = sum(
+            p.numel() for p in self.model.parameters() if p.requires_grad
+        )
+        print("\\n🧠 Model Statistics:")
         print(f"   Parameters: {params:,}")
         print(f"   Device: {self.device}")
         print(f"   Hidden dim: {self.hidden_dim}")
@@ -115,8 +116,10 @@ class Trainer:
                 next_action = batch['next_action'].to(self.device)
                 
                 # Validate inputs
-                if torch.isnan(action_seq).any() or torch.isnan(obs_seq).any():
-                    print(f"⚠️  NaN detected in input batch {batch_idx}, skipping...")
+                if (torch.isnan(action_seq).any() or
+                        torch.isnan(obs_seq).any()):
+                    msg = f"⚠️  NaN detected in batch {batch_idx}"
+                    print(msg + ", skipping...")
                     continue
                 
                 # Forward pass
@@ -142,7 +145,9 @@ class Trainer:
                 loss.backward()
                 
                 # Gradient clipping
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+                torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(), self.max_grad_norm
+                )
                 
                 # Optimizer step
                 self.optimizer.step()

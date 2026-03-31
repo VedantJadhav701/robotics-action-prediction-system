@@ -34,7 +34,8 @@ class MetricsCollector:
     
     def _save_metrics(self):
         """Save metrics to file"""
-        path = self.save_dir / f"metrics_{datetime.now().strftime('%Y%m%d')}.json"
+        timestamp = datetime.now().strftime('%Y%m%d')
+        path = self.save_dir / f"metrics_{timestamp}.json"
         with open(path, 'w') as f:
             json.dump(self.metrics, f, indent=2)
         logger.info(f"Saved {len(self.metrics)} metrics")
@@ -58,6 +59,7 @@ class MetricsCollector:
                 "std": np.std(times)
             }
         }
+
 
 class PerformanceMonitor:
     """Monitor model performance"""
