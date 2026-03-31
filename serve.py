@@ -6,6 +6,7 @@ FastAPI application for real-time robot action prediction
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, validator
 import numpy as np
 import torch
@@ -15,6 +16,7 @@ import logging
 from typing import Optional, List
 from datetime import datetime
 import time
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CollectorRegistry
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -205,6 +207,37 @@ stats = {
     "latencies": [],
 }
 
+# Prometheus metrics
+registry = CollectorRegistry()
+request_count = Counter(
+    'robotics_api_requests_total',
+    'Total API requests',
+    ['endpoint', 'method'],
+    registry=registry
+)
+request_latency = Histogram(
+    'robotics_api_request_duration_seconds',
+    'Request latency in seconds',
+    ['endpoint'],
+    registry=registry
+)
+prediction_errors = Counter(
+    'robotics_api_prediction_errors_total',
+    'Total prediction errors',
+    ['error_type'],
+    registry=registry
+)
+model_inference_time = Histogram(
+    'robotics_model_inference_seconds',
+    'Model inference time in seconds',
+    registry=registry
+)
+active_requests = Gauge(
+    'robotics_api_active_requests',
+    'Currently active requests',
+    registry=registry
+)
+
 # ============================================================================
 # STARTUP / SHUTDOWN
 # ============================================================================
@@ -364,6 +397,11 @@ async def predict_batch(request: BatchPredictionRequest):
     except Exception as e:
         logger.error(f"Batch prediction error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    return PlainTextResponse(generate_latest(registry))
 
 if __name__ == "__main__":
     import uvicorn
