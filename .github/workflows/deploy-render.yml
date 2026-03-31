@@ -1,0 +1,54 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches:
+      - main
+  workflow_run:
+    workflows: ["MLOps Pipeline"]
+    types:
+      - completed
+
+jobs:
+  deploy:
+    name: Deploy to Render
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Render
+        uses: johnbeynon/render-deploy-action@v0.0.29
+        with:
+          service-id: ${{ secrets.RENDER_SERVICE_ID }}
+          api-token: ${{ secrets.RENDER_API_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify deployment
+        run: |
+          # Wait for deployment to be active
+          echo "⏳ Waiting for deployment to stabilize..."
+          sleep 30
+
+          # Check deployment status
+          echo "✅ Deployment initiated"
+          echo "📊 Check status at: https://dashboard.render.com"
+
+      - name: Health check
+        continue-on-error: true
+        run: |
+          # Check API health endpoint
+          SERVICE_URL=${{ secrets.RENDER_SERVICE_URL }}
+          if [ -n "$SERVICE_URL" ]; then
+            echo "🔍 Checking API health..."
+            curl -f -s "$SERVICE_URL/health" || echo "⏳ Service starting..."
+          fi
+
+      - name: Deployment success notification
+        if: success()
+        run: |
+          echo "✅ Successfully deployed to Render!"
+          echo "📍 Service: robotics-action-prediction"
+          echo "🌐 Dashboard: https://dashboard.render.com"

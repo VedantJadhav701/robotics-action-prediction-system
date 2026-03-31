@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: robotics-action-prediction
+    env: docker
+    plan: standard
+    region: oregon
+
+    # Docker build configuration
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+
+    # Environment variables
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PORT
+        value: "8000"
+
+    # Build configuration
+    buildCommand: |
+      pip install --upgrade pip setuptools wheel && \
+      pip install -r requirements-prod.txt
+
+    # Startup command - overrides Dockerfile CMD
+    startCommand: python -m uvicorn serve:app --host 0.0.0.0 --port $PORT
+
+    # Health check configuration
+    healthCheckPath: /health
+    healthCheckInterval: 30
+    healthCheckTimeout: 10
+
+    # Auto-deploy on GitHub push
+    autoDeploy: true
+
+    # Scaling
+    maxInstances: 3
+    minInstances: 1
+
+    # Connect to GitHub repository
+    # This will be configured via Render dashboard
+    # repo: https://github.com/VedantJadhav701/robotics-action-prediction-system
