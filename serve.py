@@ -214,7 +214,8 @@ async def startup_event():
     """Load model on startup"""
     global engine
     try:
-        engine = ProductionRoboticsInferenceEngine(device='cuda')
+        # Auto-detect device (CUDA if available, else CPU)
+        engine = ProductionRoboticsInferenceEngine(device=None)
         logger.info("✅ Model loaded successfully on startup")
     except Exception as e:
         logger.error(f"❌ Failed to load model: {e}")
