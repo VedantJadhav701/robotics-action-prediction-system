@@ -67,7 +67,7 @@ class PredictionResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
-    model_loaded: bool
+    is_loaded: bool
     device: str
     version: str
 
@@ -201,7 +201,7 @@ async def health():
     """Health check endpoint"""
     return {
         "status": "healthy" if engine else "initializing",
-        "model_loaded": engine is not None,
+        "is_loaded": engine is not None,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "version": "1.0.0",
     }

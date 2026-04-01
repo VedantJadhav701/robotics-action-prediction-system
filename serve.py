@@ -80,7 +80,7 @@ class PredictionResponse(BaseModel):
 
     next_action: list[float]  # 34-dim
     prediction_time_ms: float
-    model_version: str
+    version: str
     timestamp: str
 
 
@@ -88,7 +88,7 @@ class HealthCheck(BaseModel):
     """Health status"""
 
     status: str
-    model_loaded: bool
+    is_loaded: bool
     api_version: str
     timestamp: str
 
@@ -312,11 +312,12 @@ async def shutdown_event():
 
 
 @app.get("/health", response_model=HealthCheck)
+@app.head("/health")
 async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy" if engine else "unhealthy",
-        "model_loaded": engine is not None,
+        "is_loaded": engine is not None,
         "api_version": "1.0.0",
         "timestamp": datetime.now().isoformat(),
     }
@@ -378,7 +379,7 @@ async def predict(request: PredictionRequest):
         return {
             "next_action": next_action.tolist(),
             "prediction_time_ms": latency_ms,
-            "model_version": MODEL_VERSION,
+            "version": MODEL_VERSION,
             "timestamp": datetime.now().isoformat(),
         }
 
@@ -406,6 +407,7 @@ async def get_stats():
 
 
 @app.get("/")
+@app.head("/")
 async def root():
     """Root endpoint with API info"""
     return {
