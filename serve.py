@@ -8,6 +8,7 @@ import json
 import logging
 import sys
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -23,7 +24,7 @@ from prometheus_client import (
     Histogram,
     generate_latest,
 )
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 # Add src to path
 sys.path.insert(0, "./src")  # noqa: E402
@@ -40,12 +41,19 @@ logger = logging.getLogger(__name__)
 
 
 class ActionSequence(BaseModel):
-    """Input: last 15 action steps"""
+    """Input: last 15 action steps (15 timesteps × 34 action dimensions)"""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"actions": [[0.0] * 34 for _ in range(15)]}  # 15 timesteps, 34 dims each
+        }
+    )
 
     actions: list[list[float]]  # (15, 34)
 
-    @validator("actions")
-    def validate_actions(v):
+    @field_validator("actions")
+    @classmethod
+    def validate_actions(cls, v):
         if len(v) != 15:
             raise ValueError(f"Expected 15 timesteps, got {len(v)}")
         if any(len(a) != 34 for a in v):
@@ -54,12 +62,21 @@ class ActionSequence(BaseModel):
 
 
 class ObservationSequence(BaseModel):
-    """Input: last 15 observation steps"""
+    """Input: last 15 observation steps (15 timesteps × 12 observation dimensions)"""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "observations": [[0.0] * 12 for _ in range(15)]  # 15 timesteps, 12 dims each
+            }
+        }
+    )
 
     observations: list[list[float]]  # (15, 12)
 
-    @validator("observations")
-    def validate_obs(v):
+    @field_validator("observations")
+    @classmethod
+    def validate_obs(cls, v):
         if len(v) != 15:
             raise ValueError(f"Expected 15 timesteps, got {len(v)}")
         if any(len(o) != 12 for o in v):
@@ -152,7 +169,7 @@ class ProductionRoboticsInferenceEngine:
             num_layers=3,
         ).to(self.device)
 
-        checkpoint = torch.load(model_path, map_location=self.device)
+        checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.model.eval()
 
@@ -212,23 +229,8 @@ class ProductionRoboticsInferenceEngine:
 
 
 # ============================================================================
-# FASTAPI APPLICATION
+# GLOBALS & CONFIG
 # ============================================================================
-
-app = FastAPI(
-    title="PhysicalAI RoboticsLSTM Inference",
-    description="Production inference server for robot action prediction",
-    version="1.0.0",
-)
-
-# CORS for integration with robot control systems
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Global inference engine
 engine: ProductionRoboticsInferenceEngine | None = None
@@ -273,14 +275,16 @@ active_requests = Gauge(
 )
 
 # ============================================================================
-# STARTUP / SHUTDOWN
+# STARTUP / SHUTDOWN (LIFESPAN)
 # ============================================================================
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Load model on startup"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Modern FastAPI lifespan handler for startup/shutdown"""
     global engine
+
+    # STARTUP
     try:
         # Auto-detect device (CUDA if available, else CPU)
         engine = ProductionRoboticsInferenceEngine(device=None)
@@ -289,21 +293,38 @@ async def startup_event():
         logger.error(f"⚠️  Model file not found: {e}")
         logger.error("   Ensure model files are included in Docker image")
         logger.error("   Check COPY models/ command in Dockerfile")
-        # Don't crash - allow API to start in degraded mode
         engine = None
     except Exception as e:
         logger.error(f"❌ Failed to load model: {e}")
         logger.error(f"   Error type: {type(e).__name__}")
-        # Allow startup to continue but log the error
         engine = None
 
+    yield  # Application runs here
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    global engine
+    # SHUTDOWN
     if engine:
         logger.info("🛑 Shutting down inference engine")
+
+
+# ============================================================================
+# FASTAPI APPLICATION
+# ============================================================================
+
+app = FastAPI(
+    title="PhysicalAI RoboticsLSTM Inference",
+    description="Production inference server for robot action prediction",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# CORS for integration with robot control systems
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ============================================================================
