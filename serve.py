@@ -449,45 +449,124 @@ async def root():
 
 
 class BatchPredictionRequest(BaseModel):
-    """Batch prediction request"""
+    """Batch prediction request with strict validation"""
 
     action_sequences: list[list[list[float]]]  # (batch, 15, 34)
     observation_sequences: list[list[list[float]]]  # (batch, 15, 12)
 
+    @field_validator("action_sequences")
+    @classmethod
+    def validate_action_sequences(cls, v):
+        """Strict validation: (B, 15, 34)"""
+        if not v:
+            raise ValueError("action_sequences cannot be empty")
+        if len(v[0]) != 15:
+            raise ValueError(f"Expected 15 timesteps per sample, got {len(v[0])}")
+        if any(len(a) != 34 for seq in v for a in seq):
+            raise ValueError("Expected 34 action dimensions, got mismatched")
+        return v
+
+    @field_validator("observation_sequences")
+    @classmethod
+    def validate_observation_sequences(cls, v):
+        """Strict validation: (B, 15, 12)"""
+        if not v:
+            raise ValueError("observation_sequences cannot be empty")
+        if len(v[0]) != 15:
+            raise ValueError(f"Expected 15 timesteps per sample, got {len(v[0])}")
+        if any(len(o) != 12 for seq in v for o in seq):
+            raise ValueError("Expected 12 observation dimensions, got mismatched")
+        return v
+
 
 @app.post("/predict-batch")
 async def predict_batch(request: BatchPredictionRequest):
-    """Batch prediction endpoint"""
+    """Batch prediction endpoint
+
+    Input:
+      - action_sequences: (B, 15, 34) batch of action histories
+      - observation_sequences: (B, 15, 12) batch of observation histories
+
+    Output:
+      - next_actions: (B, 34) predicted next actions
+    """
 
     global engine, stats
 
     if engine is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
+    stats["total_requests"] += 1
     start_time = time.time()
+    active_requests.inc()
 
     try:
+        # Convert and validate shapes
         action_array = np.array(request.action_sequences, dtype=np.float32)
         obs_array = np.array(request.observation_sequences, dtype=np.float32)
 
-        # Predict all
+        # STRICT SHAPE VALIDATION
+        if action_array.ndim != 3 or action_array.shape[1:] != (15, 34):
+            raise ValueError(f"Invalid action shape: {action_array.shape}, expected (B, 15, 34)")
+        if obs_array.ndim != 3 or obs_array.shape[1:] != (15, 12):
+            raise ValueError(f"Invalid observation shape: {obs_array.shape}, expected (B, 15, 12)")
+
+        batch_size = len(action_array)
+
+        # LOG INPUT STATISTICS
+        logger.info(
+            f"Batch prediction: B={batch_size}, "
+            f"action_mean={action_array.mean():.4f}, "
+            f"action_std={action_array.std():.4f}, "
+            f"obs_mean={obs_array.mean():.4f}, "
+            f"obs_std={obs_array.std():.4f}"
+        )
+
+        request_count.labels(endpoint="/predict-batch", method="POST").inc()
+
+        # PREDICT ALL SAMPLES
+        inference_start = time.time()
         next_actions = []
-        for i in range(len(action_array)):
+        for i in range(batch_size):
             pred = engine.predict(action_array[i], obs_array[i])
             next_actions.append(pred.tolist())
+        inference_time = time.time() - inference_start
 
         latency_ms = (time.time() - start_time) * 1000
+        stats["successful_predictions"] += batch_size
+        stats["latencies"].extend([latency_ms / batch_size] * batch_size)
+
+        # Keep only last 1000 latencies
+        if len(stats["latencies"]) > 1000:
+            stats["latencies"] = stats["latencies"][-1000:]
+
+        stats["avg_latency_ms"] = np.mean(stats["latencies"])
+
+        # Record metrics
+        request_latency.labels(endpoint="/predict-batch").observe(latency_ms / 1000.0)
+        model_inference_time.observe(inference_time)
 
         return {
             "next_actions": next_actions,
-            "batch_size": len(action_array),
+            "batch_size": batch_size,
             "total_time_ms": latency_ms,
-            "avg_time_per_sample_ms": latency_ms / len(action_array),
+            "avg_time_per_sample_ms": latency_ms / batch_size,
         }
 
+    except ValueError as e:
+        stats["failed_requests"] += 1
+        prediction_errors.labels(error_type="validation_error").inc()
+        logger.error(f"Batch validation error: {e}")
+        raise HTTPException(status_code=400, detail=f"Validation error: {str(e)}") from e
+
     except Exception as e:
+        stats["failed_requests"] += 1
+        prediction_errors.labels(error_type="inference_error").inc()
         logger.error(f"Batch prediction error: {e}")
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+    finally:
+        active_requests.dec()
 
 
 @app.get("/metrics")
